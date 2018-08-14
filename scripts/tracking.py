@@ -116,10 +116,10 @@ class ObjectTracking():
                 detected.object_class = 'Person'
                 detected.num = np.uint32(track.track_id)
                 detected.p = 1.0
-                detected.x = np.uint16(bbox[0])
-                detected.y = np.uint16(bbox[1])
-                detected.width = np.uint16(bbox[2])
-                detected.height = np.uint16(bbox[3])
+                detected.x = np.uint16(int(bbox[0]))
+                detected.y = np.uint16(int(bbox[1]))
+                detected.width = np.uint16(int(bbox[2]) - int(bbox[0]))
+                detected.height = np.uint16(int(bbox[3]) - int(bbox[1]))
 
                 detected_array.size = detected_array.size+1
                 detected_array.data.append(detected)
@@ -159,8 +159,8 @@ if __name__ == '__main__':
 
     rgb_topic_pub = rospy.get_param('~rgb_topic_pub', '~rgb_image')
     thermal_topic_pub = rospy.get_param('~thermal_topic_pub', '~thermal_image')
-    rgb_detected_topic_pub = rospy.get_param('rgb_detected_topic_pub', '~rgb_detected_full')
-    thermal_detected_topic_pub = rospy.get_param('rgb_detected_topic_pub', '~thermal_detected_full')
+    rgb_detected_topic_pub = rospy.get_param('~rgb_detected_topic_pub', '~rgb_detected_full')
+    thermal_detected_topic_pub = rospy.get_param('~rgb_detected_topic_pub', '~thermal_detected_full')
     # Definition of the parameters
     max_cosine_distance = 0.3
     nn_budget = None
@@ -174,7 +174,6 @@ if __name__ == '__main__':
     yolo_interface = YOLO()
 
     try:
-        print("Flag is: ",rgb_tracking_flag)
         if rgb_tracking_flag:
             rgb_tracking = ObjectTracking('rgb', rgb_metric, yolo_interface, model_filename, \
                 nms_max_overlap, rgb_topic, rgb_topic_pub, rgb_detected_topic_pub)
