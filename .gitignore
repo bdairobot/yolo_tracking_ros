@@ -1,0 +1,2 @@
+src/*.weights
+src/model_data/*.h5
