@@ -54,7 +54,8 @@ class ObjectTracking():
         self._image_pub = rospy.Publisher(image_pub, ROSImage, queue_size=1)
         self._detected_pub = rospy.Publisher(detected_pub, DetectedFull , queue_size=1)
 
-        self._cv_image = None
+        # self._cv_image = None
+        self._image_msg = None
         self._image_updated = False
 
         self.thread = threading.Thread(target=self.process, name=name)
@@ -63,7 +64,8 @@ class ObjectTracking():
         rospy.loginfo('##################### '+name+' Initialization Finished! #####################')
 
     def image_callback(self, image_msg):
-        self._cv_image = self._cv_bridge.imgmsg_to_cv2(image_msg, "bgr8")
+        # self._cv_image = self._cv_bridge.imgmsg_to_cv2(image_msg, "bgr8")
+        self._image_msg = image_msg
         self._image_updated = True
         # rospy.loginfo('call back in '+self.name)
 
@@ -78,7 +80,9 @@ class ObjectTracking():
                 continue
             
             self._image_updated = False
-            cv_image = self._cv_image
+            image_msg = self._image_msg
+
+            cv_image = self._cv_bridge.imgmsg_to_cv2(image_msg, "bgr8")
             image = Image.fromarray(cv_image)
             
             # self.lock.acquire()
@@ -103,23 +107,31 @@ class ObjectTracking():
             
             detected_array = DetectedArray()
             detected_full = DetectedFull()
-            detected_full.image = self._cv_bridge.cv2_to_imgmsg(cv_image)
+            detected_full.image = image_msg
             
             detected_array.size = 0
             for track in self._tracker.tracks:
                 if track.is_confirmed() and track.time_since_update >1 :
                     continue 
                 bbox = track.to_tlbr()
-                cv2.rectangle(cv_image, (int(bbox[0]), int(bbox[1])), (int(bbox[2]), int(bbox[3])),(255,0,0), 2)
-                cv2.putText(cv_image, 'Person:'+str(track.track_id),(int(bbox[0]), int(bbox[1])),0, 5e-3 * 100, (0,255,0),2)
+                
                 detected = Detected()
                 detected.object_class = 'Person'
                 detected.num = np.uint32(track.track_id)
                 detected.p = 1.0
-                detected.x = np.uint16(int(bbox[0]))
-                detected.y = np.uint16(int(bbox[1]))
-                detected.width = np.uint16(int(bbox[2]) - int(bbox[0]))
-                detected.height = np.uint16(int(bbox[3]) - int(bbox[1]))
+
+                def range_check(x,min,max):
+                    if x < min: x = min
+                    if x > max: x = max
+                    return x
+                
+                detected.x = np.uint16(range_check(int(bbox[0]),0,cv_image.shape[1]))
+                detected.y = np.uint16(range_check(int(bbox[1]),0,cv_image.shape[0]))
+                detected.width = np.uint16(range_check(int(bbox[2]) - int(bbox[0]), 0, cv_image.shape[1]))
+                detected.height = np.uint16(range_check(int(bbox[3]) - int(bbox[1]), 0, cv_image.shape[0]))
+
+                cv2.rectangle(cv_image, (int(detected.x), int(detected.y)), (int(detected.x+detected.width), int(detected.y+detected.height)),(255,0,0), 2)
+                cv2.putText(cv_image, 'Person:'+str(track.track_id),(int(detected.x), int(detected.y)),0, 5e-3 * 100, (0,255,0),2)
 
                 detected_array.size = detected_array.size+1
                 detected_array.data.append(detected)
@@ -130,7 +142,7 @@ class ObjectTracking():
             
 
             # cv2.imshow('', cv_image)
-            detected_full.header.stamp = rospy.Time.now()
+            detected_full.header.stamp = image_msg.header.stamp
             detected_full.detections = detected_array
             if self._detected_pub.get_num_connections() > 0:
                 self._detected_pub.publish(detected_full)
@@ -160,7 +172,7 @@ if __name__ == '__main__':
     rgb_topic_pub = rospy.get_param('~rgb_topic_pub', '~rgb_image')
     thermal_topic_pub = rospy.get_param('~thermal_topic_pub', '~thermal_image')
     rgb_detected_topic_pub = rospy.get_param('~rgb_detected_topic_pub', '~rgb_detected_full')
-    thermal_detected_topic_pub = rospy.get_param('~rgb_detected_topic_pub', '~thermal_detected_full')
+    thermal_detected_topic_pub = rospy.get_param('~thermal_detected_topic_pub', '~thermal_detected_full')
     # Definition of the parameters
     max_cosine_distance = 0.3
     nn_budget = None
